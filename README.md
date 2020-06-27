@@ -5,7 +5,7 @@ The pure golang version of tun2socks does not require LWIP.
 
 
 
-#use 
+# use 
 
 var tunDevice="tun0";
 
@@ -23,7 +23,7 @@ var tunDns="127.0.0.1:53";
 
 core.StartTunDevice(tunDevice,tunAddr, tunMask, tunGw, mtu,socksAddr,tunDns);
 
-#thank
+# thank
   github.com/google/netstack
   
   github.com/yinghuocho/gotun2socks
