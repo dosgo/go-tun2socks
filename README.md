@@ -1,7 +1,7 @@
 ﻿# tun2socks
 
 
-The pure golang version of tun2socks does not require LWIP.
+A tun2socks implementation written in Go.
 
 
 
