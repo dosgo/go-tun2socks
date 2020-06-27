@@ -5,8 +5,8 @@ The pure golang version of tun2socks does not require LWIP.
 
 
 
-
 #use 
+
 var tunDevice="tun0";
 var tunAddr="10.0.0.2";
 var tunMask="255.255.255.0";
