@@ -121,7 +121,7 @@ func ForwardTransportFromIo(dev io.ReadWriteCloser,mtu int,lSocksAddr string,tun
 			return
 		}
 		defer socksConn.Close();
-		if(socks5.SocksCmd(socksConn,1,remoteAddr)==nil) {
+		if(socks5.SocksCmd(socksConn,1,conn.LocalAddr().String())==nil) {
 			go io.Copy(conn, socksConn)
 			io.Copy(socksConn, conn)
 		}
