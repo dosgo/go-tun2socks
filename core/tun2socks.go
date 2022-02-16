@@ -165,7 +165,7 @@ func ForwardTransportFromIo(dev io.ReadWriteCloser, mtu int, lSocksAddr string, 
 			break
 		}
 		pkt := stack.NewPacketBuffer(stack.PacketBufferOptions{
-			Data: buffer.View(buf[:n]).ToVectorisedView(),
+			Data: buffer.NewViewFromBytes(buf[:n]).ToVectorisedView(),
 		})
 		switch header.IPVersion(buf[:]) {
 		case header.IPv4Version:
