@@ -1,20 +1,10 @@
 package core
 
 import (
+	"bytes"
+	"context"
 	"errors"
 	"fmt"
-	"github.com/google/netstack/tcpip"
-	"github.com/google/netstack/tcpip/adapters/gonet"
-	"github.com/google/netstack/tcpip/buffer"
-	"github.com/google/netstack/tcpip/header"
-	"github.com/google/netstack/tcpip/link/channel"
-	"github.com/google/netstack/tcpip/network/ipv4"
-	"github.com/google/netstack/tcpip/stack"
-	"github.com/google/netstack/tcpip/transport/tcp"
-	"github.com/google/netstack/tcpip/transport/udp"
-	"github.com/google/netstack/waiter"
-	"github.com/yinghuocho/gotun2socks/tun"
-	"go-tun2socks/socks5"
 	"io"
 	"log"
 	"net"
@@ -22,37 +12,50 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+
+	"github.com/dosgo/go-tun2socks/socks"
+	"github.com/yinghuocho/gotun2socks/tun"
+	"gvisor.dev/gvisor/pkg/tcpip"
+	"gvisor.dev/gvisor/pkg/tcpip/adapters/gonet"
+	"gvisor.dev/gvisor/pkg/tcpip/buffer"
+	"gvisor.dev/gvisor/pkg/tcpip/header"
+	"gvisor.dev/gvisor/pkg/tcpip/link/channel"
+	"gvisor.dev/gvisor/pkg/tcpip/network/ipv4"
+	"gvisor.dev/gvisor/pkg/tcpip/stack"
+	"gvisor.dev/gvisor/pkg/tcpip/transport/tcp"
+	"gvisor.dev/gvisor/pkg/tcpip/transport/udp"
+	"gvisor.dev/gvisor/pkg/waiter"
 )
 
-var  wrapnet uint32;
-var  mask uint32
-var  relayip net.IP
-var  port  uint16;
+var wrapnet uint32
+var mask uint32
+var relayip net.IP
+var port uint16
 
-func StartTunDevice(tunDevice string,tunAddr string,tunMask string,tunGW string,mtu int,sock5Addr string,tunDNS string) {
-	if(len(tunDevice)==0){
-		tunDevice="tun0";
+func StartTunDevice(tunDevice string, tunAddr string, tunMask string, tunGW string, mtu int, sock5Addr string, tunDNS string) {
+	if len(tunDevice) == 0 {
+		tunDevice = "tun0"
 	}
-	if(len(tunAddr)==0){
-		tunAddr="10.0.0.2";
+	if len(tunAddr) == 0 {
+		tunAddr = "10.0.0.2"
 	}
-	if(len(tunMask)==0){
-		tunMask="255.255.255.0";
+	if len(tunMask) == 0 {
+		tunMask = "255.255.255.0"
 	}
-	if(len(tunGW)==0){
-		tunGW="10.0.0.1";
+	if len(tunGW) == 0 {
+		tunGW = "10.0.0.1"
 	}
-	if(len(tunDNS)==0){
-		tunDNS="114.114.114.114";
+	if len(tunDNS) == 0 {
+		tunDNS = "114.114.114.114"
 	}
 	dnsServers := strings.Split(tunDNS, ",")
-	var dev io.ReadWriteCloser;
-	f, err:= tun.OpenTunDevice(tunDevice, tunAddr, tunGW, tunMask, dnsServers)
+	var dev io.ReadWriteCloser
+	f, err := tun.OpenTunDevice(tunDevice, tunAddr, tunGW, tunMask, dnsServers)
 	if err != nil {
 		fmt.Println("Error listening:", err)
-		return ;
+		return
 	}
-	dev=f;
+	dev = f
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch,
 		syscall.SIGHUP,
@@ -63,40 +66,49 @@ func StartTunDevice(tunDevice string,tunAddr string,tunMask string,tunGW string,
 		s := <-ch
 		switch s {
 		default:
-			os.Exit(0);
+			os.Exit(0)
 		}
 	}()
-	ForwardTransportFromIo(dev,mtu,sock5Addr,tunDNS);
+	ForwardTransportFromIo(dev, mtu, sock5Addr, tunDNS)
 }
-func ForwardTransportFromIo(dev io.ReadWriteCloser,mtu int,lSocksAddr string,tunDNS string) error {
-	var nicID tcpip.NICID =1;
+func ForwardTransportFromIo(dev io.ReadWriteCloser, mtu int, lSocksAddr string, tunDNS string) error {
+	var nicID tcpip.NICID = 1
 	macAddr, err := net.ParseMAC("de:ad:be:ee:ee:ef")
 	if err != nil {
-		fmt.Printf(err.Error());
+		fmt.Printf(err.Error())
 		return err
 	}
 	//[]string{ipv4.ProtocolName, ipv6.ProtocolName, arp.ProtocolName}, []string{tcp.ProtocolName, udp.ProtocolName},
-	s := stack.New( stack.Options{NetworkProtocols:   []stack.NetworkProtocol{ipv4.NewProtocol()},
-		TransportProtocols: []stack.TransportProtocol{tcp.NewProtocol(), udp.NewProtocol()}})
+	s := stack.New(stack.Options{
+		NetworkProtocols:   []stack.NetworkProtocolFactory{ipv4.NewProtocol},
+		TransportProtocols: []stack.TransportProtocolFactory{tcp.NewProtocol, udp.NewProtocol}})
 	//转发开关,必须
-	s.SetForwarding(true);
+	s.SetForwardingDefaultAndAllNICs(ipv4.ProtocolNumber, true)
 	var linkID stack.LinkEndpoint
-	var channelLinkID= channel.New(256, uint32(mtu),   tcpip.LinkAddress(macAddr))
+	var channelLinkID = channel.New(256, uint32(mtu), tcpip.LinkAddress(macAddr))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// write tun
-	go func() {
+	go func(_ctx context.Context) {
+		var sendBuffer = new(bytes.Buffer)
 		for {
-			select {
-			case pkt := <-channelLinkID.C:
-				tmpBuf:=append(pkt.Pkt.Header.View(),pkt.Pkt.Data.ToView()...)
-				if(len(tmpBuf)>0) {
-					dev.Write(tmpBuf)
-				}
-				break;
+			info := channelLinkID.ReadContext(_ctx)
+			if info == nil {
+				log.Printf("channelLinkID exit \r\n")
+				break
+			}
+			info.Data().AsRange().AsView()
+			sendBuffer.Reset()
+			sendBuffer.Write(info.NetworkHeader().View())
+			sendBuffer.Write(info.TransportHeader().View())
+			sendBuffer.Write(info.Data().AsRange().ToOwnedView())
+			if sendBuffer.Len() > 0 {
+				dev.Write(sendBuffer.Bytes())
 			}
 		}
-	}()
-	linkID=channelLinkID;
+	}(ctx)
+	linkID = channelLinkID
 	if err != nil {
 		return err
 	}
@@ -109,19 +121,19 @@ func ForwardTransportFromIo(dev io.ReadWriteCloser,mtu int,lSocksAddr string,tun
 		var wq waiter.Queue
 		ep, err := r.CreateEndpoint(&wq)
 		if err != nil {
-			fmt.Printf(err.String());
+			fmt.Printf(err.String())
 			return
 		}
 		r.Complete(false)
-		conn:=gonet.NewConn(&wq, ep)
-		defer conn.Close();
-		socksConn,err1:= net.Dial("tcp",lSocksAddr)
+		conn := gonet.NewTCPConn(&wq, ep)
+		defer conn.Close()
+		socksConn, err1 := net.Dial("tcp", lSocksAddr)
 		if err1 != nil {
 			log.Println(err1)
 			return
 		}
-		defer socksConn.Close();
-		if(socks5.SocksCmd(socksConn,1,conn.LocalAddr().String())==nil) {
+		defer socksConn.Close()
+		if socks.SocksCmd(socksConn, 1, conn.LocalAddr().String()) == nil {
 			go io.Copy(conn, socksConn)
 			io.Copy(socksConn, conn)
 		}
@@ -135,76 +147,81 @@ func ForwardTransportFromIo(dev io.ReadWriteCloser,mtu int,lSocksAddr string,tun
 			fmt.Printf("r.CreateEndpoint() = %v", err)
 		}
 		defer ep.Close()
-		conn :=gonet.NewConn(&wq, ep)
-		defer conn.Close();
+		conn := gonet.NewUDPConn(s, &wq, ep)
+		defer conn.Close()
 		//dns port
-		if(strings.HasSuffix(conn.LocalAddr().String(),":53")){
-			dnsReq(conn,"udp",tunDNS);
+		if strings.HasSuffix(conn.LocalAddr().String(), ":53") {
+			dnsReq(conn, "udp", tunDNS)
 		}
 	})
 	s.SetTransportProtocolHandler(udp.ProtocolNumber, udpForwarder.HandlePacket)
 
 	// read tun data
-	var buf=make([]byte,mtu)
+	var buf = make([]byte, mtu)
 	for {
 		n, e := dev.Read(buf[:])
 		if e != nil {
-			fmt.Printf("e:%v\r\n",e)
-			break;
+			fmt.Printf("e:%v\r\n", e)
+			break
 		}
-		tmpView:=buffer.NewVectorisedView(n,[]buffer.View{
-			buffer.NewViewFromBytes(buf[:n]),
+		pkt := stack.NewPacketBuffer(stack.PacketBufferOptions{
+			Data: buffer.View(buf[:n]).ToVectorisedView(),
 		})
-		channelLinkID.InjectInbound(header.IPv4ProtocolNumber, tcpip.PacketBuffer{
-			Data: tmpView,
-		})
+		switch header.IPVersion(buf[:]) {
+		case header.IPv4Version:
+			channelLinkID.InjectInbound(header.IPv4ProtocolNumber, pkt)
+		case header.IPv6Version:
+			channelLinkID.InjectInbound(header.IPv6ProtocolNumber, pkt)
+		}
+		pkt.DecRef()
+
 	}
 	return nil
 }
+
 /*to dns*/
-func dnsReq(conn *gonet.Conn,action string,dnsAddr string) error{
-	if(action=="tcp"){
-		dnsConn, err := net.Dial(action, dnsAddr);
+func dnsReq(conn *gonet.UDPConn, action string, dnsAddr string) error {
+	if action == "tcp" {
+		dnsConn, err := net.Dial(action, dnsAddr)
 		if err != nil {
 			fmt.Println(err.Error())
-			return err;
+			return err
 		}
-		defer dnsConn.Close();
+		defer dnsConn.Close()
 		go io.Copy(conn, dnsConn)
 		io.Copy(dnsConn, conn)
-		fmt.Printf("dnsReq Tcp\r\n");
-		return nil;
-	}else {
+		fmt.Printf("dnsReq Tcp\r\n")
+		return nil
+	} else {
 		buf := make([]byte, 4096)
-		var n = 0;
-		var err error;
+		var n = 0
+		var err error
 		n, err = conn.Read(buf)
 		if err != nil {
 			fmt.Printf("c.Read() = %v", err)
-			return err;
+			return err
 		}
-		dnsConn, err := net.Dial("udp",dnsAddr);
+		dnsConn, err := net.Dial("udp", dnsAddr)
 		if err != nil {
 			fmt.Println(err.Error())
-			return err;
+			return err
 		}
-		defer dnsConn.Close();
+		defer dnsConn.Close()
 		_, err = dnsConn.Write(buf[:n])
-		if (err != nil) {
+		if err != nil {
 			fmt.Println(err.Error())
-			return err;
+			return err
 		}
-		n, err = dnsConn.Read(buf);
-		if (err != nil) {
+		n, err = dnsConn.Read(buf)
+		if err != nil {
 			fmt.Println(err.Error())
-			return err;
+			return err
 		}
 		_, err = conn.Write(buf[:n])
-		if (err != nil) {
+		if err != nil {
 			fmt.Println(err.Error())
-			return err;
+			return err
 		}
 	}
-	return nil;
+	return nil
 }
-
