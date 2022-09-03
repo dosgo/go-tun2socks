@@ -1,23 +1,19 @@
 package core
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net"
-	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 
 	"github.com/dosgo/go-tun2socks/socks"
-	"github.com/yinghuocho/gotun2socks/tun"
+	"github.com/dosgo/go-tun2socks/tun"
+	"gvisor.dev/gvisor/pkg/bufferv2"
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/adapters/gonet"
-	"gvisor.dev/gvisor/pkg/tcpip/buffer"
 	"gvisor.dev/gvisor/pkg/tcpip/header"
 	"gvisor.dev/gvisor/pkg/tcpip/link/channel"
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv4"
@@ -33,42 +29,11 @@ var relayip net.IP
 var port uint16
 
 func StartTunDevice(tunDevice string, tunAddr string, tunMask string, tunGW string, mtu int, sock5Addr string, tunDNS string) {
-	if len(tunDevice) == 0 {
-		tunDevice = "tun0"
-	}
-	if len(tunAddr) == 0 {
-		tunAddr = "10.0.0.2"
-	}
-	if len(tunMask) == 0 {
-		tunMask = "255.255.255.0"
-	}
-	if len(tunGW) == 0 {
-		tunGW = "10.0.0.1"
-	}
-	if len(tunDNS) == 0 {
-		tunDNS = "114.114.114.114"
-	}
-	dnsServers := strings.Split(tunDNS, ",")
-	var dev io.ReadWriteCloser
-	f, err := tun.OpenTunDevice(tunDevice, tunAddr, tunGW, tunMask, dnsServers)
+	dev, err := tun.RegTunDev(tunDevice, tunAddr, tunMask, tunGW, tunDNS)
 	if err != nil {
-		fmt.Println("Error listening:", err)
+		fmt.Println("start tun err:", err)
 		return
 	}
-	dev = f
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch,
-		syscall.SIGHUP,
-		syscall.SIGINT,
-		syscall.SIGTERM,
-		syscall.SIGQUIT)
-	go func() {
-		s := <-ch
-		switch s {
-		default:
-			os.Exit(0)
-		}
-	}()
 	ForwardTransportFromIo(dev, mtu, sock5Addr, tunDNS)
 }
 func ForwardTransportFromIo(dev io.ReadWriteCloser, mtu int, lSocksAddr string, tunDNS string) error {
@@ -91,21 +56,14 @@ func ForwardTransportFromIo(dev io.ReadWriteCloser, mtu int, lSocksAddr string, 
 
 	// write tun
 	go func(_ctx context.Context) {
-		var sendBuffer = new(bytes.Buffer)
 		for {
 			info := channelLinkID.ReadContext(_ctx)
 			if info == nil {
 				log.Printf("channelLinkID exit \r\n")
 				break
 			}
-			info.Data().AsRange().AsView()
-			sendBuffer.Reset()
-			sendBuffer.Write(info.NetworkHeader().View())
-			sendBuffer.Write(info.TransportHeader().View())
-			sendBuffer.Write(info.Data().AsRange().ToOwnedView())
-			if sendBuffer.Len() > 0 {
-				dev.Write(sendBuffer.Bytes())
-			}
+			info.ToView().WriteTo(dev)
+			info.DecRef()
 		}
 	}(ctx)
 	linkID = channelLinkID
@@ -165,9 +123,11 @@ func ForwardTransportFromIo(dev io.ReadWriteCloser, mtu int, lSocksAddr string, 
 			break
 		}
 		pkt := stack.NewPacketBuffer(stack.PacketBufferOptions{
-			Data: buffer.NewViewFromBytes(buf[:n]).ToVectorisedView(),
+			//ReserveHeaderBytes: len(hdr),
+			Payload: bufferv2.MakeWithData(buf[:n]),
+			//IsForwardedPacket: true,
 		})
-		switch header.IPVersion(buf[:]) {
+		switch header.IPVersion(buf) {
 		case header.IPv4Version:
 			channelLinkID.InjectInbound(header.IPv4ProtocolNumber, pkt)
 		case header.IPv6Version:
