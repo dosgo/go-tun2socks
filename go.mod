@@ -1,6 +1,6 @@
 module github.com/dosgo/go-tun2socks
 
-go 1.17
+go 1.18
 
 require (
 	github.com/dosgo/xsocks v0.0.0-20220829135017-7da56ad69d8c
