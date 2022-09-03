@@ -21,11 +21,10 @@ var socksAddr="127.0.0.1:1080";
 
 var tunDns="127.0.0.1:53";
 
-core.StartTunDevice(tunDevice,tunAddr, tunMask, tunGw, mtu,socksAddr,tunDns);
+tun2socks.StartTunDevice(tunDevice,tunAddr, tunMask, tunGw, mtu,socksAddr,tunDns);
 
 # thank
   github.com/google/netstack
-  
-  github.com/yinghuocho/gotun2socks
+ 
   
   github.com/miekg/dns
