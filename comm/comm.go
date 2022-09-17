@@ -1,8 +1,9 @@
-package core
+package comm
 
 import (
 	"errors"
 	"fmt"
+	"io"
 	"log"
 
 	"net"
@@ -20,12 +21,33 @@ import (
 	"gvisor.dev/gvisor/pkg/waiter"
 )
 
+type CommIPConn interface {
+	SetDeadline(t time.Time) error
+	SetReadDeadline(t time.Time) error
+	SetWriteDeadline(t time.Time) error
+	LocalAddr() net.Addr
+	RemoteAddr() net.Addr
+}
+
+type CommTCPConn interface {
+	CommIPConn
+	io.ReadWriteCloser
+}
+type CommUDPConn interface {
+	CommIPConn
+	io.ReadWriteCloser
+}
+
+type CommEndpoint interface {
+	tcpip.Endpoint
+}
+
 const (
 	tcpCongestionControlAlgorithm = "cubic" // "reno" or "cubic"
 )
 
-type ForwarderCall func(conn *gonet.TCPConn) error
-type UdpForwarderCall func(conn *gonet.UDPConn, ep tcpip.Endpoint) error
+type ForwarderCall func(conn CommTCPConn) error
+type UdpForwarderCall func(conn CommUDPConn, ep CommEndpoint) error
 
 func NewDefaultStack(mtu int, tcpCallback ForwarderCall, udpCallback UdpForwarderCall) (*stack.Stack, *channel.Endpoint, error) {
 

@@ -8,12 +8,10 @@ import (
 	"net"
 	"strings"
 
-	"github.com/dosgo/go-tun2socks/core"
+	"github.com/dosgo/go-tun2socks/comm"
 	"github.com/dosgo/go-tun2socks/socks"
 	"github.com/dosgo/go-tun2socks/tun"
 	"gvisor.dev/gvisor/pkg/bufferv2"
-	"gvisor.dev/gvisor/pkg/tcpip"
-	"gvisor.dev/gvisor/pkg/tcpip/adapters/gonet"
 	"gvisor.dev/gvisor/pkg/tcpip/header"
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
 )
@@ -36,7 +34,7 @@ func StartTunDevice(tunDevice string, tunAddr string, tunMask string, tunGW stri
 	ForwardTransportFromIo(dev, mtu, rawTcpForwarder, rawUdpForwarder)
 }
 
-func rawTcpForwarder(conn *gonet.TCPConn) error {
+func rawTcpForwarder(conn comm.CommTCPConn) error {
 	defer conn.Close()
 	socksConn, err1 := net.Dial("tcp", sock5Addr)
 	if err1 != nil {
@@ -51,7 +49,7 @@ func rawTcpForwarder(conn *gonet.TCPConn) error {
 	return nil
 }
 
-func rawUdpForwarder(conn *gonet.UDPConn, ep tcpip.Endpoint) error {
+func rawUdpForwarder(conn comm.CommUDPConn, ep comm.CommEndpoint) error {
 	defer conn.Close()
 	//dns port
 	if strings.HasSuffix(conn.LocalAddr().String(), ":53") {
@@ -60,8 +58,8 @@ func rawUdpForwarder(conn *gonet.UDPConn, ep tcpip.Endpoint) error {
 	return nil
 }
 
-func ForwardTransportFromIo(dev io.ReadWriteCloser, mtu int, tcpCallback core.ForwarderCall, udpCallback core.UdpForwarderCall) error {
-	_, channelLinkID, err := core.NewDefaultStack(mtu, tcpCallback, udpCallback)
+func ForwardTransportFromIo(dev io.ReadWriteCloser, mtu int, tcpCallback comm.ForwarderCall, udpCallback comm.UdpForwarderCall) error {
+	_, channelLinkID, err := comm.NewDefaultStack(mtu, tcpCallback, udpCallback)
 	if err != nil {
 		log.Printf("err:%v", err)
 		return err
@@ -108,7 +106,7 @@ func ForwardTransportFromIo(dev io.ReadWriteCloser, mtu int, tcpCallback core.Fo
 }
 
 /*to dns*/
-func dnsReq(conn *gonet.UDPConn, action string, dnsAddr string) error {
+func dnsReq(conn comm.CommUDPConn, action string, dnsAddr string) error {
 	if action == "tcp" {
 		dnsConn, err := net.Dial(action, dnsAddr)
 		if err != nil {
