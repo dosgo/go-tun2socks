@@ -6,11 +6,11 @@ require (
 	github.com/miekg/dns v1.1.50
 	github.com/sensepost/godoh v0.0.0-20220625194118-246d72ba3253
 	github.com/songgao/water v0.0.0-20200317203138-2b4b6d7c09d8
-	golang.org/x/crypto v0.2.0
+	golang.org/x/crypto v0.0.0-20220315160706-3147a52a75dd
 	golang.org/x/sys v0.2.0
 	golang.zx2c4.com/wireguard v0.0.0-20220920152132-bb719d3a6e2c
 	golang.zx2c4.com/wireguard/windows v0.5.3
-	gvisor.dev/gvisor v0.0.0-20220826233730-c9c4ccb3f49b
+	gvisor.dev/gvisor v0.0.0-20220925003544-1e2f1a11bf64
 )
 
 require (
