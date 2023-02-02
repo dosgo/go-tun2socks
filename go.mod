@@ -10,7 +10,7 @@ require (
 	golang.org/x/sys v0.2.0
 	golang.zx2c4.com/wireguard v0.0.0-20220920152132-bb719d3a6e2c
 	golang.zx2c4.com/wireguard/windows v0.5.3
-	gvisor.dev/gvisor v0.0.0-20221214043228-7501cb5e258d
+	gvisor.dev/gvisor v0.0.0-20230127155032-51e5f9cdea66
 )
 
 require (

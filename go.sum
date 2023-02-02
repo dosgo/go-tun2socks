@@ -81,5 +81,5 @@ golang.zx2c4.com/wireguard/windows v0.5.3 h1:On6j2Rpn3OEMXqBq00QEDC7bWSZrPIHKIus
 golang.zx2c4.com/wireguard/windows v0.5.3/go.mod h1:9TEe8TJmtwyQebdFwAkEWOPr3prrtqm+REGFifP60hI=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/yaml.v2 v2.4.0/go.mod h1:RDklbk79AGWmwhnvt/jBztapEOGDOx6ZbXqjP6csGnQ=
-gvisor.dev/gvisor v0.0.0-20221214043228-7501cb5e258d h1:Qv5JGQLhijce8oqZmuD54V3lj1RxmVtP5rvj7NwxDjM=
-gvisor.dev/gvisor v0.0.0-20221214043228-7501cb5e258d/go.mod h1:Dn5idtptoW1dIos9U6A2rpebLs/MtTwFacjKb8jLdQA=
+gvisor.dev/gvisor v0.0.0-20230127155032-51e5f9cdea66 h1:MWT++rb/A/2lMHUnvH0yGRBkoWNpynUMZn6jSJLrOQo=
+gvisor.dev/gvisor v0.0.0-20230127155032-51e5f9cdea66/go.mod h1:94x/o/BlxPAbw4phqHRac0/IzpcQRUP7ZQldDWV3TKU=
