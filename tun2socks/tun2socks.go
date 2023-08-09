@@ -11,7 +11,7 @@ import (
 	"github.com/dosgo/go-tun2socks/core"
 	"github.com/dosgo/go-tun2socks/socks"
 	"github.com/dosgo/go-tun2socks/tun"
-	"gvisor.dev/gvisor/pkg/bufferv2"
+	"gvisor.dev/gvisor/pkg/buffer"
 	"gvisor.dev/gvisor/pkg/tcpip/header"
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
 )
@@ -91,7 +91,7 @@ func ForwardTransportFromIo(dev io.ReadWriteCloser, mtu int, tcpCallback core.Fo
 		}
 
 		pkt := stack.NewPacketBuffer(stack.PacketBufferOptions{
-			Payload: bufferv2.MakeWithData(buf[:n]),
+			Payload: buffer.MakeWithData(buf[:n]),
 		})
 
 		switch header.IPVersion(buf) {
