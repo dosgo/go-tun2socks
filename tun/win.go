@@ -27,11 +27,15 @@ type DevReadWriteCloser struct {
 }
 
 func (conn DevReadWriteCloser) Read(buf []byte) (int, error) {
-	return conn.tunDev.Read(buf, 0)
+	data := [][]byte{buf}
+	dataLen := []int{}
+	_, err := conn.tunDev.Read(data, dataLen, 0)
+	return dataLen[0], err
 }
 
 func (conn DevReadWriteCloser) Write(buf []byte) (int, error) {
-	return conn.tunDev.Write(buf, 0)
+	data := [][]byte{buf}
+	return conn.tunDev.Write(data, 0)
 }
 
 func (conn DevReadWriteCloser) Close() error {
@@ -106,7 +110,7 @@ func RegTunDev(tunDevice string, tunAddr string, tunMask string, tunGW string, t
 	if len(tunDNS) == 0 {
 		tunDNS = "114.114.114.114"
 	}
-	tunDev, err := tun.CreateTUNWithRequestedGUID(tunDevice, determineGUID(tunDevice), 1500)
+	tunDev, err := tun.CreateTUN(tunDevice, 1500)
 	if err != nil {
 		return nil, err
 	}

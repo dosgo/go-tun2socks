@@ -5,13 +5,38 @@ package tun
 
 import (
 	"fmt"
-	"github.com/songgao/water"
-	"os/exec"
 	"net"
-	"strings"
-	"strconv"
+	"os/exec"
 	"runtime"
+	"strconv"
+	"strings"
+
+	"github.com/songgao/water"
+	"golang.zx2c4.com/wireguard/tun"
 )
+
+type DevReadWriteCloser struct {
+	tunDev *tun.NativeTun
+}
+
+func (conn DevReadWriteCloser) Read(buf []byte) (int, error) {
+	data := [][]byte{buf}
+	dataLen := []int{}
+	_, err := conn.tunDev.Read(data, dataLen, 0)
+	return dataLen[0], err
+}
+
+func (conn DevReadWriteCloser) Write(buf []byte) (int, error) {
+	data := [][]byte{buf}
+	return conn.tunDev.Write(data, 0)
+}
+
+func (conn DevReadWriteCloser) Close() error {
+	if conn.tunDev == nil {
+		return nil
+	}
+	return conn.tunDev.Close()
+}
 
 func GetCidrIpRange(cidr string) (string, string) {
 	ip := strings.Split(cidr, "/")[0]
@@ -25,14 +50,14 @@ func GetCidrIpRange(cidr string) (string, string) {
 		ipPrefix + strconv.Itoa(seg3MaxIp) + "." + strconv.Itoa(seg4MaxIp)
 }
 
-//得到第四段IP的区间（第一片段.第二片段.第三片段.第四片段）
+// 得到第四段IP的区间（第一片段.第二片段.第三片段.第四片段）
 func getIpSeg4Range(ipSegs []string, maskLen int) (int, int) {
 	ipSeg, _ := strconv.Atoi(ipSegs[3])
 	segMinIp, segMaxIp := getIpSegRange(uint8(ipSeg), uint8(32-maskLen))
 	return segMinIp + 1, segMaxIp
 }
 
-//得到第三段IP的区间（第一片段.第二片段.第三片段.第四片段）
+// 得到第三段IP的区间（第一片段.第二片段.第三片段.第四片段）
 func getIpSeg3Range(ipSegs []string, maskLen int) (int, int) {
 	if maskLen > 24 {
 		segIp, _ := strconv.Atoi(ipSegs[2])
@@ -42,8 +67,7 @@ func getIpSeg3Range(ipSegs []string, maskLen int) (int, int) {
 	return getIpSegRange(uint8(ipSeg), uint8(24-maskLen))
 }
 
-
-//根据用户输入的基础IP地址和CIDR掩码计算一个IP片段的区间
+// 根据用户输入的基础IP地址和CIDR掩码计算一个IP片段的区间
 func getIpSegRange(userSegIp, offset uint8) (int, int) {
 	var ipSegMax uint8 = 255
 	netSegIp := ipSegMax << offset
@@ -61,7 +85,7 @@ func GetWaterConf(tunAddr string, tunMask string) water.Config {
 }
 
 /*windows linux mac use tun dev*/
-func RegTunDev(tunDevice string, tunAddr string, tunMask string, tunGW string, tunDNS string) (*water.Interface, error) {
+func RegTunDev1(tunDevice string, tunAddr string, tunMask string, tunGW string, tunDNS string) (*water.Interface, error) {
 	if len(tunDevice) == 0 {
 		tunDevice = "tun0"
 	}
@@ -84,10 +108,8 @@ func RegTunDev(tunDevice string, tunAddr string, tunMask string, tunGW string, t
 		fmt.Println("start tun err:", err)
 		return nil, err
 	}
-	//set ifco conf
-	if runtime.GOOS == "windows" {
-		CmdHide("netsh", "interface", "ip", "set", "address", "name="+ifce.Name(), "source=static", "addr="+tunAddr, "mask="+tunMask, "gateway=none").Run()
-	} else if runtime.GOOS == "linux" {
+
+	if runtime.GOOS == "linux" {
 		//sudo ip addr add 10.1.0.10/24 dev O_O
 		masks := net.ParseIP(tunMask).To4()
 		maskAddr := net.IPNet{IP: net.ParseIP(tunAddr), Mask: net.IPv4Mask(masks[0], masks[1], masks[2], masks[3])}
@@ -101,6 +123,44 @@ func RegTunDev(tunDevice string, tunAddr string, tunMask string, tunGW string, t
 		CmdHide("ifconfig", "utun2", ipMin, ipMax, "up").Run()
 	}
 	return ifce, nil
+}
+
+/*windows use wintun*/
+func RegTunDev(tunDevice string, tunAddr string, tunMask string, tunGW string, tunDNS string) (*DevReadWriteCloser, error) {
+	if len(tunDevice) == 0 {
+		tunDevice = "socksTun0"
+	}
+	if len(tunAddr) == 0 {
+		tunAddr = "10.0.0.2"
+	}
+	if len(tunMask) == 0 {
+		tunMask = "255.255.255.0"
+	}
+	if len(tunGW) == 0 {
+		tunGW = "10.0.0.1"
+	}
+	if len(tunDNS) == 0 {
+		tunDNS = "114.114.114.114"
+	}
+	tunDev, err := tun.CreateTUN(tunDevice, 1500)
+	if err != nil {
+		return nil, err
+	}
+	tunDevName, _ := tunDev.Name()
+	if runtime.GOOS == "linux" {
+		//sudo ip addr add 10.1.0.10/24 dev O_O
+		masks := net.ParseIP(tunMask).To4()
+		maskAddr := net.IPNet{IP: net.ParseIP(tunAddr), Mask: net.IPv4Mask(masks[0], masks[1], masks[2], masks[3])}
+		CmdHide("ip", "addr", "add", maskAddr.String(), "dev", tunDevName).Run()
+		CmdHide("ip", "link", "set", "dev", tunDevName, "up").Run()
+	} else if runtime.GOOS == "darwin" {
+		//ifconfig utun2 10.1.0.10 10.1.0.20 up
+		masks := net.ParseIP(tunMask).To4()
+		maskAddr := net.IPNet{IP: net.ParseIP(tunAddr), Mask: net.IPv4Mask(masks[0], masks[1], masks[2], masks[3])}
+		ipMin, ipMax := GetCidrIpRange(maskAddr.String())
+		CmdHide("ifconfig", tunDevName, ipMin, ipMax, "up").Run()
+	}
+	return &DevReadWriteCloser{tunDev.(*tun.NativeTun)}, nil
 }
 
 func CmdHide(name string, arg ...string) *exec.Cmd {
