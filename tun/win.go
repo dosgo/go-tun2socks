@@ -22,29 +22,6 @@ import (
 	"golang.zx2c4.com/wireguard/windows/tunnel/winipcfg"
 )
 
-type DevReadWriteCloser struct {
-	tunDev *tun.NativeTun
-}
-
-func (conn DevReadWriteCloser) Read(buf []byte) (int, error) {
-	data := [][]byte{buf}
-	dataLen := []int{}
-	_, err := conn.tunDev.Read(data, dataLen, 0)
-	return dataLen[0], err
-}
-
-func (conn DevReadWriteCloser) Write(buf []byte) (int, error) {
-	data := [][]byte{buf}
-	return conn.tunDev.Write(data, 0)
-}
-
-func (conn DevReadWriteCloser) Close() error {
-	if conn.tunDev == nil {
-		return nil
-	}
-	return conn.tunDev.Close()
-}
-
 //go:embed wintun/amd64/wintun.dll
 var winAmd64Bin []byte
 
