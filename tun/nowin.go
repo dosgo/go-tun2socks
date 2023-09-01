@@ -62,7 +62,7 @@ func GetWaterConf(tunAddr string, tunMask string) water.Config {
 }
 
 /*windows linux mac use tun dev*/
-func RegTunDev1(tunDevice string, tunAddr string, tunMask string, tunGW string, tunDNS string) (*water.Interface, error) {
+func RegTunDev(tunDevice string, tunAddr string, tunMask string, tunGW string, tunDNS string) (*water.Interface, error) {
 	if len(tunDevice) == 0 {
 		tunDevice = "tun0"
 	}
@@ -103,7 +103,7 @@ func RegTunDev1(tunDevice string, tunAddr string, tunMask string, tunGW string, 
 }
 
 /*windows use wintun*/
-func RegTunDev(tunDevice string, tunAddr string, tunMask string, tunGW string, tunDNS string) (*DevReadWriteCloser, error) {
+func RegTunDevTest(tunDevice string, tunAddr string, tunMask string, tunGW string, tunDNS string) (*DevReadWriteCloser, error) {
 	if len(tunDevice) == 0 {
 		tunDevice = "socksTun0"
 	}
