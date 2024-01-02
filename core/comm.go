@@ -114,7 +114,7 @@ func NewDefaultStack(mtu int, tcpCallback ForwarderCall, udpCallback UdpForwarde
 			log.Printf("r.CreateEndpoint() = %v", err)
 			return
 		}
-		go udpCallback(gonet.NewUDPConn(_netStack, &wq, ep), ep)
+		go udpCallback(gonet.NewUDPConn(&wq, ep), ep)
 	})
 	_netStack.SetTransportProtocolHandler(udp.ProtocolNumber, udpForwarder.HandlePacket)
 
