@@ -83,15 +83,16 @@ func ForwardTransportFromIo(dev io.ReadWriteCloser, mtu int, tcpCallback core.Fo
 
 	// read tun data
 	var buf = make([]byte, mtu+80)
+	var recvLen=0;
 	for {
-		n, e := dev.Read(buf[:])
-		if e != nil {
+		recvLen, err = dev.Read(buf[:])
+		if err != nil {
 			log.Printf("err:%v", err)
 			break
 		}
 
 		pkt := stack.NewPacketBuffer(stack.PacketBufferOptions{
-			Payload: buffer.MakeWithData(buf[:n]),
+			Payload: buffer.MakeWithData(buf[:recvLen]),
 		})
 
 		switch header.IPVersion(buf) {
