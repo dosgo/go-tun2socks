@@ -1,8 +1,8 @@
 module github.com/dosgo/go-tun2socks
 
-go 1.21.1
+go 1.22.0
 
-toolchain go1.21.4
+toolchain go1.22.2
 
 require (
 	github.com/miekg/dns v1.1.59
@@ -12,7 +12,7 @@ require (
 	golang.org/x/sys v0.21.0
 	golang.zx2c4.com/wireguard v0.0.0-20231211153847-12269c276173
 	golang.zx2c4.com/wireguard/windows v0.5.3
-	gvisor.dev/gvisor v0.0.0-20240306221502-ee1e1f6070e3
+	gvisor.dev/gvisor v0.0.0-20240521174809-5eedbf551134
 )
 
 require (
