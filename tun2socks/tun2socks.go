@@ -72,7 +72,7 @@ func ForwardTransportFromIo(dev io.ReadWriteCloser, mtu int, tcpCallback core.Fo
 	go func(_ctx context.Context) {
 		for {
 			info := channelLinkID.ReadContext(_ctx)
-			if info.IsNil() {
+			if info==nil {
 				log.Printf("channelLinkID exit \r\n")
 				break
 			}
