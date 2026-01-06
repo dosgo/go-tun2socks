@@ -11,7 +11,6 @@ import (
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/adapters/gonet"
 	"gvisor.dev/gvisor/pkg/tcpip/header"
-	"gvisor.dev/gvisor/pkg/tcpip/link/channel"
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv4"
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv6"
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
@@ -44,7 +43,7 @@ type CommEndpoint interface {
 type ForwarderCall func(conn CommTCPConn) error
 type UdpForwarderCall func(conn CommUDPConn, ep CommEndpoint) error
 
-func NewDefaultStack(mtu int, tcpCallback ForwarderCall, udpCallback UdpForwarderCall) (*stack.Stack, *channel.Endpoint, error) {
+func NewDefaultStack(linkID stack.LinkEndpoint, mtu int, tcpCallback ForwarderCall, udpCallback UdpForwarderCall) (*stack.Stack, error) {
 
 	// Generate unique NIC id.
 
@@ -53,14 +52,14 @@ func NewDefaultStack(mtu int, tcpCallback ForwarderCall, udpCallback UdpForwarde
 		TransportProtocols: []stack.TransportProtocolFactory{tcp.NewProtocol, udp.NewProtocol},
 	})
 
-	macAddr, _ := net.ParseMAC("de:ad:be:ee:ee:ef")
+	//macAddr, _ := net.ParseMAC("de:ad:be:ee:ee:ef")
 
 	var nicid tcpip.NICID = 1
-	var linkID stack.LinkEndpoint
-	var channelLinkID = channel.New(1024, uint32(mtu), tcpip.LinkAddress(macAddr))
-	linkID = channelLinkID
+	//var linkID stack.LinkEndpoint
+	//	var channelLinkID = channel.New(1024, uint32(mtu), tcpip.LinkAddress(macAddr))
+	//linkID = channelLinkID
 	if err := _netStack.CreateNIC(nicid, linkID); err != nil {
-		return _netStack, nil, errors.New(err.String())
+		return _netStack, errors.New(err.String())
 	}
 	_netStack.CreateNICWithOptions(nicid, linkID,
 		stack.NICOptions{
@@ -97,18 +96,19 @@ func NewDefaultStack(mtu int, tcpCallback ForwarderCall, udpCallback UdpForwarde
 	})
 	_netStack.SetTransportProtocolHandler(tcp.ProtocolNumber, tcpForwarder.HandlePacket)
 
-	udpForwarder := udp.NewForwarder(_netStack, func(r *udp.ForwarderRequest) {
+	udpForwarder := udp.NewForwarder(_netStack, func(r *udp.ForwarderRequest) bool {
 		var wq waiter.Queue
 		ep, err := r.CreateEndpoint(&wq)
 		if err != nil {
 			log.Printf("r.CreateEndpoint() = %v", err)
-			return
+			return false
 		}
 		go udpCallback(gonet.NewUDPConn(&wq, ep), ep)
+		return true
 	})
 	_netStack.SetTransportProtocolHandler(udp.ProtocolNumber, udpForwarder.HandlePacket)
 
-	return _netStack, channelLinkID, nil
+	return _netStack, nil
 }
 
 func setSocketOptions(s *stack.Stack, ep tcpip.Endpoint) tcpip.Error {

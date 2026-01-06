@@ -12,7 +12,9 @@ import (
 	"github.com/dosgo/go-tun2socks/socks"
 	"github.com/dosgo/go-tun2socks/tun"
 	"gvisor.dev/gvisor/pkg/buffer"
+	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/header"
+	"gvisor.dev/gvisor/pkg/tcpip/link/channel"
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
 )
 
@@ -59,7 +61,10 @@ func rawUdpForwarder(conn core.CommUDPConn, ep core.CommEndpoint) error {
 }
 
 func ForwardTransportFromIo(dev io.ReadWriteCloser, mtu int, tcpCallback core.ForwarderCall, udpCallback core.UdpForwarderCall) error {
-	_, channelLinkID, err := core.NewDefaultStack(mtu, tcpCallback, udpCallback)
+	macAddr, _ := net.ParseMAC("de:ad:be:ee:ee:ef")
+	var channelLinkID = channel.New(1024, uint32(mtu), tcpip.LinkAddress(macAddr))
+
+	_, err := core.NewDefaultStack(channelLinkID, mtu, tcpCallback, udpCallback)
 	if err != nil {
 		log.Printf("err:%v", err)
 		return err
@@ -72,7 +77,7 @@ func ForwardTransportFromIo(dev io.ReadWriteCloser, mtu int, tcpCallback core.Fo
 	go func(_ctx context.Context) {
 		for {
 			info := channelLinkID.ReadContext(_ctx)
-			if info==nil {
+			if info == nil {
 				log.Printf("channelLinkID exit \r\n")
 				break
 			}
@@ -83,7 +88,7 @@ func ForwardTransportFromIo(dev io.ReadWriteCloser, mtu int, tcpCallback core.Fo
 
 	// read tun data
 	var buf = make([]byte, mtu+80)
-	var recvLen=0;
+	var recvLen = 0
 	for {
 		recvLen, err = dev.Read(buf[:])
 		if err != nil {
