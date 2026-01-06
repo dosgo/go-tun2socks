@@ -16,7 +16,8 @@ var socksAddr = "127.0.0.1:1080";
 var tunDns = "8.8.8.8:53";
 
 tun2socks.StartTunDevice(tunDevice, tunAddr, tunMask, tunGw, mtu, socksAddr, tunDns);
-go```
+
+```
 ### Custom I/O (e.g., Android VpnService)
 For environments like Android where you already have a File Descriptor or a custom stream, use the ForwardTransportFromIo interface:
 
