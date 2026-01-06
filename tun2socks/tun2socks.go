@@ -68,8 +68,7 @@ func ForwardTransportFromIo(dev io.ReadWriteCloser, mtu int, tcpCallback core.Fo
 		log.Printf("err:%v", err)
 		return err
 	}
-	ep.DispatchLoop()
-
+	go ep.DispatchLoop()
 	return nil
 }
 
