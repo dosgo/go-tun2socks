@@ -46,10 +46,56 @@ func rawTcpForwarder(conn core.CommTCPConn) error {
 }
 
 func rawUdpForwarder(conn core.CommUDPConn, ep core.CommEndpoint) error {
-	defer conn.Close()
-	//dns port
+	// DNS 请求保持不变
 	if strings.HasSuffix(conn.LocalAddr().String(), ":53") {
-		dnsReq(conn, "udp", tunDNS)
+		return dnsReq(conn, "udp", tunDNS)
+	}
+
+	// 建立到 Socks5 的控制连接 (TCP)
+	socksConn, err := net.Dial("tcp", sock5Addr)
+	if err != nil {
+		return nil
+	}
+	// 注意：只要这个 TCP 连接不断开，UDP 映射就一直存在
+	defer socksConn.Close()
+
+	// 1. 发起 UDP 关联
+	relayAddr, err := socks.SocksUdpCmd(socksConn, "0.0.0.0:0")
+	if err != nil {
+		return nil
+	}
+
+	// 2. 连接到代理分配的 UDP 中继端口
+	udpRelay, err := net.Dial("udp", relayAddr.String())
+	if err != nil {
+		return nil
+	}
+	defer udpRelay.Close()
+
+	targetAddr := conn.LocalAddr().String()
+
+	// 3. 数据转发：中继 -> 网卡
+	go func() {
+		buf := make([]byte, 2048)
+		for {
+			n, err := udpRelay.Read(buf)
+			if err != nil {
+				return
+			}
+			data, _ := socks.DecodeUDPPacket(buf[:n])
+			conn.Write(data)
+		}
+	}()
+
+	// 4. 数据转发：网卡 -> 中继
+	buf := make([]byte, 2048)
+	for {
+		n, err := conn.Read(buf)
+		if err != nil {
+			break
+		}
+		encodedPkt := socks.EncodeUDPPacket(targetAddr, buf[:n])
+		udpRelay.Write(encodedPkt)
 	}
 	return nil
 }
