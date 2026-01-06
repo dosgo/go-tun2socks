@@ -1,7 +1,6 @@
 package tun2socks
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"log"
@@ -11,11 +10,6 @@ import (
 	"github.com/dosgo/go-tun2socks/core"
 	"github.com/dosgo/go-tun2socks/socks"
 	"github.com/dosgo/go-tun2socks/tun"
-	"gvisor.dev/gvisor/pkg/buffer"
-	"gvisor.dev/gvisor/pkg/tcpip"
-	"gvisor.dev/gvisor/pkg/tcpip/header"
-	"gvisor.dev/gvisor/pkg/tcpip/link/channel"
-	"gvisor.dev/gvisor/pkg/tcpip/stack"
 )
 
 var wrapnet uint32
@@ -61,53 +55,21 @@ func rawUdpForwarder(conn core.CommUDPConn, ep core.CommEndpoint) error {
 }
 
 func ForwardTransportFromIo(dev io.ReadWriteCloser, mtu int, tcpCallback core.ForwarderCall, udpCallback core.UdpForwarderCall) error {
-	macAddr, _ := net.ParseMAC("de:ad:be:ee:ee:ef")
-	var channelLinkID = channel.New(1024, uint32(mtu), tcpip.LinkAddress(macAddr))
+	//macAddr, _ := net.ParseMAC("de:ad:be:ee:ee:ef")
+	//var channelLinkID = channel.New(1024, uint32(mtu), tcpip.LinkAddress(macAddr))
 
-	_, err := core.NewDefaultStack(channelLinkID, mtu, tcpCallback, udpCallback)
+	ep := core.NewDirectEndpoint(
+		dev,
+		uint32(mtu),
+	)
+
+	_, err := core.NewDefaultStack(ep, mtu, tcpCallback, udpCallback)
 	if err != nil {
 		log.Printf("err:%v", err)
 		return err
 	}
+	ep.DispatchLoop()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// write tun
-	go func(_ctx context.Context) {
-		for {
-			info := channelLinkID.ReadContext(_ctx)
-			if info == nil {
-				log.Printf("channelLinkID exit \r\n")
-				break
-			}
-			info.ToView().WriteTo(dev)
-			info.DecRef()
-		}
-	}(ctx)
-
-	// read tun data
-	var buf = make([]byte, mtu+80)
-	var recvLen = 0
-	for {
-		recvLen, err = dev.Read(buf[:])
-		if err != nil {
-			log.Printf("err:%v", err)
-			break
-		}
-
-		pkt := stack.NewPacketBuffer(stack.PacketBufferOptions{
-			Payload: buffer.MakeWithData(buf[:recvLen]),
-		})
-
-		switch header.IPVersion(buf) {
-		case header.IPv4Version:
-			channelLinkID.InjectInbound(header.IPv4ProtocolNumber, pkt)
-		case header.IPv6Version:
-			channelLinkID.InjectInbound(header.IPv6ProtocolNumber, pkt)
-		}
-		pkt.DecRef()
-	}
 	return nil
 }
 
