@@ -10,6 +10,7 @@ import (
 	"github.com/dosgo/go-tun2socks/core"
 	"github.com/dosgo/go-tun2socks/socks"
 	"github.com/dosgo/go-tun2socks/tun"
+	"golang.org/x/net/proxy"
 )
 
 var wrapnet uint32
@@ -32,16 +33,21 @@ func StartTunDevice(tunDevice string, tunAddr string, tunMask string, tunGW stri
 
 func rawTcpForwarder(conn core.CommTCPConn) error {
 	defer conn.Close()
-	socksConn, err1 := net.Dial("tcp", sock5Addr)
-	if err1 != nil {
-		log.Println(err1)
-		return nil
+	dialer, err := proxy.SOCKS5("tcp", sock5Addr, nil, proxy.Direct)
+	if err != nil {
+		log.Printf("SOCKS5 拨号失败: %v", err)
+		return err
+	}
+	// ... err check
+	socksConn, err := dialer.Dial("tcp", conn.LocalAddr().String())
+	if err != nil {
+		log.Printf("SOCKS5 拨号失败: %v", err)
+		return err
 	}
 	defer socksConn.Close()
-	if socks.SocksCmd(socksConn, 1, conn.LocalAddr().String()) == nil {
-		go io.Copy(conn, socksConn)
-		io.Copy(socksConn, conn)
-	}
+	go io.Copy(conn, socksConn)
+	io.Copy(socksConn, conn)
+
 	return nil
 }
 
